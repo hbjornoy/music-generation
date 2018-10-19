@@ -13,3 +13,9 @@ Task:
 Architecture:
 - RNN to capture the time-dependant patterns
 - roll-out after given startingpoint
+
+
+Notes from lecture:
+- maybe do monte-carlo roll out for generation
+- scale the outputs/predictions (because of sparse data)
+- we can generate different frequency from MIDI
