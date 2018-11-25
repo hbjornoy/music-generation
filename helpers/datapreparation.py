@@ -14,7 +14,7 @@ import torch
 
 
 
-def piano_roll_to_pretty_midi(piano_roll, fs=100, program=2):
+def piano_roll_to_pretty_midi(piano_roll, fs=100, program=1):
     '''Convert a Piano Roll array into a PrettyMidi object
      with a single instrument.
 
@@ -81,16 +81,16 @@ def midfile_to_piano_roll(filepath,fs=5):
     df.to_csv(filepath[:-3]+"csv")
     return filepath[:-3]+"csv"
 
-def piano_roll_to_mid_file(pianoroll_matrix,fname,fs=5):
+def piano_roll_to_mid_file(pianoroll_matrix,fname,fs=5,instrument=1):
     """ input: piano roll matrix with shape (number of notes, time steps)
         output: string with path to mid file
     """
-    piano_roll_to_pretty_midi(pianoroll_matrix,fs).write(fname)
+    piano_roll_to_pretty_midi(pianoroll_matrix,fs,instrument).write(fname)
     return os.path.join(os.getcwd(),fname)
     
     
 def midfile_to_piano_roll_ins(filepath,instrument_n=0,fs=5):
-    """ convert mid file to piano_roll csv matrix, but selecting a specific instrument in the mid file
+    """ convert mid file to piano_roll csv matrix, but selecting a SPECIFIC INSTRUMENT in the mid file
         input: path to mid file, intrument to select in midfile
         output: path to piano_roll csv file
     """
@@ -106,9 +106,13 @@ def load_all_dataset(dirpath,binarize=True):
         output: list of numpy arrays
     """
     if(binarize):
-        return [(pd.read_csv(os.path.join(dirpath, file)).values>0).astype(int) for file in sorted(os.listdir(dirpath)) if file.endswith(".csv")]
+        datasets = [(pd.read_csv(os.path.join(dirpath, file)).values>0).astype(int) for file in sorted(os.listdir(dirpath)) if file.endswith(".csv")]
     else:
-        return [pd.read_csv(os.path.join(dirpath, file)).values for file in sorted(os.listdir(dirpath)) if file.endswith(".csv")]
+        datasets = [pd.read_csv(os.path.join(dirpath, file)).values for file in sorted(os.listdir(dirpath)) if file.endswith(".csv")]
+    # HB: to remove first timelapse of every song, because all the notes are activated for some reason.
+    for i, dataset in enumerate(datasets):
+        datasets[i] = dataset[:][:,1:]
+    return datasets
 
 def load_all_dataset_names(dirpath):
     """ given a diretory finds all the csv in the d
@@ -213,10 +217,10 @@ def gen_music_pianoroll(model,length=1000,init=None,composer=0,fs=5):
 
 def gen_music_seconds(model,init,composer=0,fs=5,gen_seconds=10,init_seconds=5):
     if(init is None):
-        song=generate_round(model, torch.LongTensor([composer]).unsqueeze(1).cuda(),gen_seconds*fs,1)
+        song=generate_round(model, torch.LongTensor([composer]).unsqueeze(1),gen_seconds*fs,1)
     else:
         init_index = int(init_seconds*fs) 
-        song=generate_round(model, torch.LongTensor([composer]).unsqueeze(1).cuda(),(gen_seconds-init_seconds+1)*fs,1,init[1:(init_index+1)])
+        song=generate_round(model, torch.LongTensor([composer]).unsqueeze(1),(gen_seconds-init_seconds+1)*fs,1,init[1:(init_index+1)])
     res = ( song.squeeze(1).detach().cpu().numpy()).astype(float).T
     visualize_piano_roll(res,fs)
     return embed_play_v1(res,fs)

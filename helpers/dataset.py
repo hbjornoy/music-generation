@@ -1,13 +1,15 @@
+
 from torch.utils.data import Dataset
 import datapreparation as datp
 import torch
 import numpy as np
+import random
 
 class pianoroll_dataset_batch(Dataset):
     """
     
     """
-    def __init__(self, root_dir, transform=None, name_as_tag=True,binarize=True):
+    def __init__(self, root_dir, transform=None, name_as_tag=True,binarize=True, seed=1):
         """
         Args:
             root_dir (string): Directory with all the csv
@@ -17,13 +19,53 @@ class pianoroll_dataset_batch(Dataset):
         super(pianoroll_dataset_batch, self).__init__()
         self.root_dir = root_dir
         self.transform = transform
+        self.seed = seed
         if(name_as_tag):
             self.tags =  datp.load_all_dataset_names(self.root_dir)
             self.tags_ids=dict(zip(np.unique(self.tags),range(np.unique(self.tags).size)))
         self.data = datp.load_all_dataset(self.root_dir,binarize)
+        self.data, self.tags = self.shuffle(self.data, self.tags, seed)
+    
+    def shuffle(self, list_a, list_b, seed):
+        zipped_list = list(zip(list_a, list_b))
+        random.Random(seed).shuffle(zipped_list)
+        list_a, list_b = zip(*zipped_list)
+        return list_a, list_b
+    
+    def split_datasets(self, split=[0.7,0.85, 1.0]):
+        """            datasets.append([map(self.transpose_and_expand_dim,data_shuffled[prev_split_nr:split_nr]),
+                           map(self.from_names_to_ids, self.tags_shuffled[prev_split_nr:split_nr]),
+                           map(lambda x: self.transpose_and_expand_dim(x,targets=True),data_shuffled[prev_split_nr:split_nr])])"""
+        
+        split_int = [int(round(len(self.tags)*perc)) for perc in split]
+        datasets = [None]*3
+
+        prev_split_nr = 0
+        for dataset_nr, split_nr in enumerate(split_int):
+            datasets[dataset_nr] = []
+            for index in range(prev_split_nr,split_nr):
+                datasets[dataset_nr].append(self[index])
+                
+            prev_split_nr = split_nr
+        
+        training, validation, testing = datasets[0], datasets[1], datasets[2]
+        print("Number of songs in training_data: {}".format(len(training)))
+        print("Number of songs in validation_data: {}".format(len(validation)))
+        print("Number of songs in testing_data: {}".format(len(testing)))
+        return training, validation, testing
+    
+    def transpose_and_expand_dim(self, data, targets=True):
+        if targets:
+            return one_end(torch.Tensor(data.T).unsqueeze(1))
+        return torch.Tensor(data.T).unsqueeze(1)
+    
+    def from_names_to_ids(self, name):
+        return torch.LongTensor([ self.tags_ids[name]]).unsqueeze(1)
 
     def gen_batch(self,batchsize=100,chunks_per_song=20):
         return None
+    
+    # Shouldn't this return the length of the samples of the dataset? not the number of artist...
     def __len__(self):
         return len(self.tags)
 
@@ -99,4 +141,4 @@ class pianoroll_dataset_chunks(Dataset):
         datp.visualize_piano_roll(self[idx])
         
 def one_end(input_tensor,k=1):
-    return torch.cat( (input_tensor[k:], torch.zeros(size=(k,input_tensor.shape[1],input_tensor.shape[2]))) )
+    return torch.cat( (input_tensor[k:], torch.zeros(size=(k,input_tensor.shape[1],input_tensor.shape[2]))))
