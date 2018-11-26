@@ -11,7 +11,70 @@ import fluidsynth
 import torch
 ### need also to install fluidsynth to be able to synthesize midi file to audio (pip install fluidsynth)
 
+#HB
+def plot_loss(metrics, skip_first=5):
+    
+    # create dataframes with the seperate metrics
+    df_losses = pd.DataFrame(metrics[0:2]).T
+    df_accuracies = pd.DataFrame(metrics[2:4]).T
+    
+    # loss-plot
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=[16,3])
+    df_losses[skip_first:].plot(ax=ax1, title="Loss")
+    ax1.legend(['train_loss', 'val_loss'])
+    ax1.set_xlabel('#epochs')
+    ax1.set_ylabel('loss')
+    # accuracy-plot
+    df_accuracies[skip_first:].plot(ax=ax2, title="Accuracy")
+    ax2.legend(['train_accuracy', 'val_accuracy'])
+    ax2.set_xlabel('#epochs')
+    ax2.set_ylabel('accuracy')
+    fig.subplots_adjust(wspace = 0.2 )
+    
+    plt.show()
 
+def gen_music(song, model, p=0.5):
+    """p: float 0<1 beeing the percentage of timesteps in the song it gets before continuing"""
+    print "Composer: ", num_to_composer(song[1].item())
+    hidden = None
+    
+    real_song = song[0]
+    print real_song.shape
+    
+    #fake_song = torch.zeros(1, song[0].shape[1], song[0].shape[2])
+    #fake_song.new_empty(real_song.shape)
+    fake_song_list = []
+    #print fake_song
+    
+    real_song_length = song[0].shape[0]-1
+    nr_given_notes = int(np.floor(real_song_length*p))
+    #print real_song_length
+    print "nr given notes: ", nr_given_notes
+
+    for i in range(song[0].shape[0]):
+        if i < nr_given_notes:
+            last_sound = song[0][None, i]
+        else:
+            last_sound = guessed_sound
+            
+        guessed_sound, hidden = model.forward(last_sound, tag=song[1], hidden=hidden)
+        #print(guessed_sound.shape)
+        fake_song_list.append(last_sound)
+    
+    fake_song = torch.cat(fake_song_list)
+    fake_song = fake_song.squeeze().t().detach().numpy()
+    real_song = np.array(real_song.squeeze().t())
+    print "REAL-shape: ", real_song.shape
+    print "FAKE-shape: ", fake_song.shape
+    
+    #vizually compare notes
+    datapreparation.visualize_piano_roll(real_song) # modify to have red line on p
+    datapreparation.visualize_piano_roll(fake_song) # modify to have red line on p
+    
+    # sound quality check
+    display(datapreparation.embed_play_v1(real_song))
+    display(datapreparation.embed_play_v1(fake_song))
+    return fake_song
 
 
 def piano_roll_to_pretty_midi(piano_roll, fs=100, program=1):
